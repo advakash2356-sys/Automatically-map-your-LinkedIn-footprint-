@@ -1,0 +1,6 @@
+{
+  "name": "Akash Sync Agent",
+  "description": "Administrative control center and automation dashboard for local workflow optimization, profile indexing status, and secure Cloudflare Access policy synchronization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
