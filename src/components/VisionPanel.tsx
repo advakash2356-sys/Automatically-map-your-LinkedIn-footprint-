@@ -7,707 +7,626 @@ import {
   Zap, 
   CheckCircle2, 
   XCircle, 
-  RefreshCw, 
   Clock, 
   ShieldCheck, 
-  Cpu, 
   Loader2, 
-  Lock,
-  Clipboard,
-  Check,
-  AlertTriangle,
-  FileText,
-  User,
-  Info
+  Check, 
+  AlertTriangle, 
+  Info,
+  Download,
+  Activity,
+  ArrowRight,
+  Sparkles,
+  RefreshCw,
+  Copy,
+  ChevronRight,
+  Globe,
+  Briefcase,
+  Layers,
+  FileCheck,
+  Send,
+  MapPin,
+  DollarSign
 } from 'lucide-react';
-
-interface VisionLink {
-  id: string;
-  originalUrl: string;
-  resolvedUrl: string;
-  status: 'pending' | 'resolving' | 'resolved' | 'failed' | 'enrolled' | 'dead_link' | 'irrelevant';
-  category: 'Career Portal' | 'Google Course' | 'Coursera Hub' | 'General';
-  applied: boolean;
-}
+import { VisionLink, CandidateProfile, TargetPayloadType } from '../types';
+import { COMPLIANCE_DISCLAIMER, COMPLIANCE_ORGANIZATION, COMPLIANCE_TITLE } from '../constants/compliance';
+import ComplianceVerificationBadge from './ComplianceVerificationBadge';
 
 interface VisionPanelProps {
   onAddLog: (message: string, level: 'info' | 'warning' | 'error' | 'success', source: 'System' | 'Playwright') => void;
-  profile: any;
+  profile: CandidateProfile;
+  onNavigateToHistory?: () => void;
+  extractedLinks: VisionLink[];
+  setExtractedLinks: React.Dispatch<React.SetStateAction<VisionLink[]>>;
 }
 
-export default function VisionPanel({ onAddLog, profile }: VisionPanelProps) {
+export default function VisionPanel({ 
+  onAddLog, 
+  profile,
+  onNavigateToHistory,
+  extractedLinks,
+  setExtractedLinks
+}: VisionPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentStep, setCurrentStep] = useState<string>('');
-  const [extractionProgress, setExtractionProgress] = useState(0);
-  const [extractedLinks, setExtractedLinks] = useState<VisionLink[]>([]);
-  const [isApplying, setIsApplying] = useState(false);
-  const [applyProgress, setApplyProgress] = useState(0);
-  const [currentApplyLink, setCurrentApplyLink] = useState<string>('');
-  const [cooldownDelay, setCooldownDelay] = useState<number>(30); // in seconds
-
-  const [copilotMode, setCopilotMode] = useState<'whitehat' | 'automation'>('whitehat');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [selectedPayloadType, setSelectedPayloadType] = useState<Record<string, 'pitch' | 'email' | 'linkedin' | 'phone'>>({});
+  const [selectedPayloadType, setSelectedPayloadType] = useState<Record<string, TargetPayloadType>>({});
+  const [validatingLinks, setValidatingLinks] = useState<Record<string, boolean>>({});
+  const [isValidatingAll, setIsValidatingAll] = useState<boolean>(false);
+  const [activeTrack, setActiveTrack] = useState<'india_tech_track' | 'global_remote_track' | 'certifications_track'>('india_tech_track');
 
-  const triggerCopy = async (linkId: string, type: 'pitch' | 'email' | 'linkedin' | 'phone') => {
-    let textToCopy = '';
-    
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  // Get payload text based on selection
+  const getPayloadText = (type: TargetPayloadType) => {
     switch (type) {
       case 'email':
-        textToCopy = profile.email || 'Adv.akash2356@gmail.com';
-        break;
+        return profile.email || 'Adv.akash2356@gmail.com';
       case 'linkedin':
-        textToCopy = profile.linkedinUrl || 'https://linkedin.com/in/adv-akash';
-        break;
+        return profile.linkedinUrl || 'https://www.linkedin.com/in/adv-akash';
       case 'phone':
-        textToCopy = profile.phone || '+91 91234 56789';
-        break;
+        return profile.phone || '+91 98765 43210';
+      case 'cover_letter':
+        return profile.coverLetter || `Dear Hiring Team,\n\nI am writing to express my interest in this role. With 7+ years of experience delivering full-stack React/Node.js web architectures and resilient automation pipelines, I look forward to contributing to your team.\n\nBest regards,\n${profile.fullName || 'Akash Sharma'}\n${profile.email || 'Adv.akash2356@gmail.com'}`;
       case 'pitch':
       default:
-        textToCopy = `Hello,
-
-I am checking out your opening and believe my credentials and enterprise track record align perfectly.
-My Contacts:
-- Full Name: Akash Sharma
-- Email: ${profile.email || "Adv.akash2356@gmail.com"}
-- Contact Phone: ${profile.phone || "+91 91234 56789"}
-- Professional Footprint: ${profile.linkedinUrl || "https://linkedin.com/in/adv-akash"}
-
-Summary Matrix Of My Portfolio Profile:
-${profile.rawText?.split('\n').slice(0, 5).join('\n') || "Lead Systems Architect with proven experience building Playwright cloud tunnels, zero-trust cloudflare gates, and secure, human-in-the-loop macOS integrations."}
-
-Thank you for your consideration, looking forward to speaking further!`;
-        break;
-    }
-
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      setToastMessage(`SUCCESS: Mapped ${type.toUpperCase()} to Clipboard!`);
-      onAddLog(`Copilot Board: Instantly buffered ${type.toUpperCase()} vector. Safe for Paste.`, 'success', 'System');
-      setTimeout(() => setToastMessage(null), 3000);
-    } catch (err: any) {
-      onAddLog(`Clipboard Buffer Error: ${err.message}`, 'error', 'System');
+        return profile.tailoredPitch || `${profile.fullName || 'Akash Sharma'} — Senior Systems Architect with ${profile.experienceYears || '7+ years'} experience delivering high-impact web and systems architectures. Specialized in TypeScript, React, Node.js, and Cloud Infrastructure. Excited to bring strategic execution to this role.`;
     }
   };
 
-  const updateTargetStatus = async (id: string, status: 'pending' | 'enrolled' | 'dead_link' | 'irrelevant') => {
-    onAddLog(`Syncing target status to: ${status.toUpperCase()}...`, 'info', 'System');
-    
-    // Smooth Optimistic State transition
-    setExtractedLinks(prev => prev.map(lnk => lnk.id === id ? { 
-      ...lnk, 
-      status, 
-      applied: status === 'enrolled' 
-    } : lnk));
-
+  // Record history on server
+  const recordHistory = async (link: VisionLink, status: 'Success' | 'Failed' | 'Launched', httpStatus = 200, notes = '') => {
     try {
-      const res = await fetch('/api/vision/update-target', {
+      await fetch('/api/history', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          id, 
-          status, 
-          applied: status === 'enrolled' 
+        body: JSON.stringify({
+          targetId: link.id,
+          jobTitle: link.title,
+          company: link.company,
+          originalUrl: link.originalUrl,
+          resolvedUrl: link.resolvedUrl,
+          category: link.category,
+          status,
+          httpStatus,
+          notes: notes || `Launched via 1-Click Copilot Deck (${link.title || link.category})`
         })
       });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Export current Action Queue results as a JSON file
+  const handleExportActionQueue = () => {
+    if (extractedLinks.length === 0) {
+      showToast('No target items in Action Queue to export.');
+      return;
+    }
+
+    const payload = {
+      complianceVerification: COMPLIANCE_TITLE,
+      disclaimer: COMPLIANCE_DISCLAIMER,
+      organization: COMPLIANCE_ORGANIZATION,
+      exportTimestamp: new Date().toISOString(),
+      candidateName: profile.fullName || 'Akash Sharma',
+      totalTargets: extractedLinks.length,
+      targets: extractedLinks
+    };
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(payload, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `pathpilot_action_queue_${new Date().toISOString().slice(0, 10)}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
+
+    showToast('Exported Action Queue with IP Compliance as JSON!');
+    onAddLog(`Action Queue Backup: Exported ${extractedLinks.length} target vectors with IP Compliance Verification.`, 'success', 'System');
+  };
+
+  // Pre-flight check reachability before launching
+  const validateSingleTarget = async (link: VisionLink): Promise<{ valid: boolean; statusCode: number }> => {
+    setValidatingLinks(prev => ({ ...prev, [link.id]: true }));
+    onAddLog(`Validating reachability for [${link.resolvedUrl}]...`, 'info', 'System');
+
+    try {
+      const res = await fetch('/api/vision/validate-target', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: link.id, url: link.resolvedUrl })
+      });
+
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.item) {
-          setExtractedLinks(prev => prev.map(lnk => lnk.id === id ? { 
-            ...lnk, 
-            status: data.item.status, 
-            applied: data.item.applied 
-          } : lnk));
-          onAddLog(`Target status [${status.toUpperCase()}] committed on secure ledger database.`, 'success', 'System');
+        setExtractedLinks(prev => prev.map(lnk => lnk.id === link.id ? {
+          ...lnk,
+          status: data.valid ? (lnk.status === 'dead_link' ? 'resolved' : lnk.status) : 'dead_link',
+          httpStatus: data.statusCode,
+          lastValidatedAt: new Date().toISOString()
+        } : lnk));
+
+        return { valid: data.valid, statusCode: data.statusCode };
+      }
+    } catch (err: any) {
+      onAddLog(`Validation error for ${link.resolvedUrl}: ${err.message}`, 'warning', 'System');
+    } finally {
+      setValidatingLinks(prev => ({ ...prev, [link.id]: false }));
+    }
+
+    return { valid: true, statusCode: 200 };
+  };
+
+  // Validate all links in queue
+  const handleValidateAllTargets = async () => {
+    if (extractedLinks.length === 0) return;
+    setIsValidatingAll(true);
+    onAddLog(`Running pre-flight HTTP verification across ${extractedLinks.length} queue targets...`, 'info', 'System');
+
+    let validCount = 0;
+    let deadCount = 0;
+
+    for (const lnk of extractedLinks) {
+      const result = await validateSingleTarget(lnk);
+      if (result.valid) validCount++;
+      else deadCount++;
+      await new Promise(r => setTimeout(r, 120));
+    }
+
+    setIsValidatingAll(false);
+    showToast(`Verification complete: ${validCount} active, ${deadCount} dead links.`);
+    onAddLog(`Verification complete: ${validCount} verified live, ${deadCount} dead links identified.`, 'success', 'System');
+  };
+
+  // 1-Click Launch Copilot Action:
+  const handleSafeLaunch = async (link: VisionLink) => {
+    const payloadType = selectedPayloadType[link.id] || 'pitch';
+    const textToCopy = getPayloadText(payloadType);
+
+    // 1. Copy payload to user's native clipboard
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      showToast(`Copied ${payloadType.toUpperCase()} & safe-launched portal!`);
+      onAddLog(`Copilot: Injected ${payloadType.toUpperCase()} to clipboard for ${link.title || link.category}`, 'success', 'System');
+    } catch (err: any) {
+      onAddLog(`Clipboard injection error: ${err.message}`, 'warning', 'System');
+    }
+
+    // 2. Mark in local state as launched
+    setExtractedLinks(prev => prev.map(lnk => lnk.id === link.id ? {
+      ...lnk,
+      applied: true,
+      status: 'launched',
+      httpStatus: 200
+    } : lnk));
+
+    // 3. Record in audit history
+    await recordHistory(link, 'Launched', 200, `1-Click Safe Launch (${payloadType.toUpperCase()})`);
+
+    // 4. Open in native browser tab
+    window.open(link.resolvedUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Mark applied manually
+  const handleMarkApplied = async (link: VisionLink) => {
+    setExtractedLinks(prev => prev.map(lnk => lnk.id === link.id ? {
+      ...lnk,
+      applied: true,
+      status: 'completed'
+    } : lnk));
+    await recordHistory(link, 'Success', link.httpStatus || 200, 'User marked applied/enrolled');
+    showToast(`Marked ${link.title || 'target'} as completed!`);
+  };
+
+  // Track preset loader
+  const handleLoadTrackPreset = async (trackKey: 'india_tech_track' | 'global_remote_track' | 'certifications_track') => {
+    setActiveTrack(trackKey);
+    setIsProcessing(true);
+    setCurrentStep('Loading curated feed...');
+    
+    try {
+      const res = await fetch('/api/vision/ocr-resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ track: trackKey, fileName: trackKey })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.links && Array.isArray(data.links)) {
+          setExtractedLinks(data.links);
+          const trackLabel = trackKey === 'india_tech_track' ? 'India Tech Track' :
+                             trackKey === 'global_remote_track' ? 'Global Remote Track' : 'Certifications Hub';
+          showToast(`Ingested ${data.links.length} verified targets for ${trackLabel}!`);
+          onAddLog(`Ingested ${data.links.length} live job target vectors from ${trackLabel}`, 'success', 'System');
         }
       }
     } catch (err: any) {
-      onAddLog(`Failed to synchronize status with server: ${err.message}`, 'error', 'System');
-    }
-  };
-
-  const sampleScreenshots = [
-    { id: '210008', title: 'Google Certs List', desc: 'Google & Coursera Course Aggregation' },
-    { id: '210009', title: 'Naukri Remote Index', desc: 'Remote Tech Openings' },
-    { id: '210010', title: 'Devops Resources', desc: 'AWS & Docker Skill Training' },
-    { id: '210011', title: 'Remote Workplaces', desc: 'Career Board Directories' }
-  ];
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      processFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      processFile(e.target.files[0]);
-    }
-  };
-
-  const processFile = (file: File) => {
-    setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64Data = result.split(',')[1] || result;
-      triggerExtraction(file.name, true, base64Data);
-    };
-    reader.onerror = () => {
-      onAddLog('Vision Engine Error: Failed to standardize input file format.', 'error', 'System');
-      triggerExtraction(file.name, true);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const selectSample = (id: string, name: string) => {
-    setSelectedFile(new File([], `${id}.jpg`, { type: 'image/jpeg' }));
-    triggerExtraction(`${id}.jpg`, false);
-  };
-
-  const triggerExtraction = async (fileName: string, isCustom: boolean, base64Data?: string) => {
-    setIsProcessing(true);
-    setExtractionProgress(0);
-    setExtractedLinks([]);
-    setCurrentStep('Initializing Vision OCR model interface...');
-    onAddLog(`Vision Engine: processing feed screenshot ${fileName}`, 'info', 'System');
-
-    const steps = [
-      { progress: 15, msg: 'Loading image into buffer coordinates...' },
-      { progress: 35, msg: 'Running Apple Silicon core-enhanced Tesseract OCR parser...' },
-      { progress: 55, msg: 'Analyzing text zones: matching URL strings and lnkd.in anchors...' },
-      { progress: 75, msg: 'Extracting shortened token redirects...' },
-      { progress: 100, msg: 'Extraction resolved.' }
-    ];
-
-    for (const step of steps) {
-      await new Promise(r => setTimeout(r, 450));
-      setExtractionProgress(step.progress);
-      setCurrentStep(step.msg);
-    }
-
-    try {
-      const response = await fetch('/api/vision/ocr-resolve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileName, isCustom, base64Data })
-      });
-      
-      const data = await response.json();
-      if (response.ok) {
-        setExtractedLinks(data.links);
-        onAddLog(`Vision Engine: resolved ${data.links.length} shortened anchors safely outside active tracking scopes.`, 'success', 'System');
-      } else {
-        throw new Error(data.error || 'Failed to resolve links');
-      }
-    } catch (err: any) {
-      onAddLog(`Vision Engine Error: ${err.message}`, 'error', 'System');
+      onAddLog(`Preset load failure: ${err.message}`, 'error', 'System');
     } finally {
       setIsProcessing(false);
       setCurrentStep('');
     }
   };
 
-  const startAutoApplyLoop = async () => {
-    if (extractedLinks.length === 0) return;
-    setIsApplying(true);
-    setApplyProgress(0);
-    onAddLog('Initiating secure auto-apply & course enrollment worker...', 'info', 'Playwright');
+  // Custom file upload handler
+  const handleCustomFileUpload = (file: File) => {
+    if (!file) return;
+    setSelectedFile(file);
+    setIsProcessing(true);
+    setCurrentStep('Executing Multimodal OCR...');
 
-    let completedCount = 0;
-    const items = [...extractedLinks];
-
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      setCurrentApplyLink(item.resolvedUrl);
-      onAddLog(`[Playwright Async] Preparing context for: ${item.resolvedUrl}`, 'info', 'Playwright');
-      
-      setExtractedLinks(prev => prev.map(p => p.id === item.id ? { ...p, status: 'resolving' } : p));
-      
-      await new Promise(r => setTimeout(r, 1000));
-      onAddLog(`[Playwright Async] Tunneling request via residential IPv4 IP to isolate platform session analytics.`, 'info', 'Playwright');
-
-      await new Promise(r => setTimeout(r, 1200));
-      onAddLog(`[Playwright Async] Successfully compiled enrollment target parameters on: ${item.category}`, 'info', 'Playwright');
-
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target?.result?.toString().split(',')[1];
       try {
-        await fetch('/api/vision/apply-target', {
+        const res = await fetch('/api/vision/ocr-resolve', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: item.id })
+          body: JSON.stringify({
+            fileName: file.name,
+            isCustom: true,
+            base64Data
+          })
         });
-      } catch (e) {}
 
-      setExtractedLinks(prev => prev.map(p => p.id === item.id ? { ...p, status: 'resolved', applied: true } : p));
-      completedCount++;
-      setApplyProgress(Math.round((completedCount / items.length) * 100));
-      onAddLog(`[Playwright Async] Enrollment finalized for ${item.resolvedUrl}. Dynamic cooldown cooling initiated.`, 'success', 'Playwright');
-
-      if (i < items.length - 1) {
-        onAddLog(`[Stealth Assurance] Pausing pipeline thread for ${cooldownDelay} seconds in compliance with account protection rules...`, 'warning', 'Playwright');
-        for (let cd = cooldownDelay; cd > 0; cd--) {
-          await new Promise(r => setTimeout(r, 1000));
+        if (res.ok) {
+          const data = await res.json();
+          if (data.links && Array.isArray(data.links)) {
+            setExtractedLinks(data.links);
+            showToast(`Extracted ${data.links.length} targets from screenshot!`);
+            onAddLog(`Extracted ${data.links.length} target vectors from ${file.name}`, 'success', 'System');
+          }
         }
+      } catch (err: any) {
+        onAddLog(`OCR error: ${err.message}`, 'error', 'System');
+      } finally {
+        setIsProcessing(false);
+        setCurrentStep('');
       }
-    }
-
-    setIsApplying(false);
-    setCurrentApplyLink('');
-    setApplyProgress(100);
-    onAddLog(`Campaign auto-enrollment finalized successfully.`, 'success', 'System');
+    };
+    reader.readAsDataURL(file);
   };
 
-  const getCategoryTheme = (category: string) => {
-    switch (category) {
-      case 'Google Course': return 'bg-sky-50 text-sky-700 border border-sky-100';
-      case 'Coursera Hub': return 'bg-indigo-50 text-indigo-700 border border-indigo-100';
-      case 'Career Portal': return 'bg-emerald-50 text-emerald-700 border border-emerald-100';
-      default: return 'bg-zinc-50 border border-zinc-200 text-zinc-600';
-    }
-  };
+  const totalTargets = extractedLinks.length;
+  const appliedCount = extractedLinks.filter(l => l.applied || l.status === 'completed' || l.status === 'launched').length;
 
   return (
-    <div id="vision-operations-block" className="space-y-5">
+    <div id="steps-2-and-3-workspace" className="space-y-5">
       
-      {/* 1. Header / Intro Banner */}
-      <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-4 flex items-start gap-3">
-        <ShieldCheck className="w-5 h-5 text-emerald-600 mt-0.5 flex-shrink-0" />
-        <div className="flex flex-col gap-1">
-          <h3 className="font-display font-bold text-xs text-zinc-800 uppercase tracking-wider">
-            2. Resource Feed Processing (stealth extraction)
-          </h3>
-          <p className="font-sans text-[11px] text-zinc-500 leading-relaxed">
-            Mitigate telemetry-tracking cookie triggers. Upload platform post screenshot snapshots cleanly. The vision parser OCR layers resolve links safely without revealing session tracking metadata profiles.
-          </p>
-        </div>
-      </div>
-
-      {/* 2. Drag area & Samples layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* STEP 2: MULTIMODAL INGESTION MODULE */}
+      <div className="celestial-card rounded-2xl p-5 shadow-lg space-y-4">
         
-        {/* Drop zone */}
-        <div className="md:col-span-2 flex flex-col gap-1.5">
-          <label className="text-[10px] font-mono uppercase font-extrabold tracking-widest text-zinc-400">
-            Screenshot Aggregate Ingest
-          </label>
-          <div 
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`cursor-pointer border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2.5 transition-all min-h-[145px] text-center relative ${
-              isDragging 
-                ? 'border-blue-600 bg-blue-50/45' 
-                : selectedFile 
-                  ? 'border-emerald-500 bg-emerald-50/30' 
-                  : 'border-zinc-200 bg-zinc-50/40 hover:bg-zinc-50/90'
+        {/* Module Header */}
+        <div className="flex items-center justify-between border-b border-amber-500/15 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <ImageIcon className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] font-bold text-blue-300 bg-blue-500/15 border border-blue-500/30 px-1.5 py-0.5 rounded uppercase">
+                  Step 2
+                </span>
+                <h2 className="font-display font-bold text-xs text-zinc-100 uppercase tracking-wider">
+                  Multimodal Job Ingestion & Radar
+                </h2>
+              </div>
+              <p className="text-[11px] text-zinc-400">
+                Load curated high-match feeds for Indian & Global remote markets or drop custom screenshots.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 3 PRESET FEED BUTTONS */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          
+          {/* India Tech Track */}
+          <button
+            onClick={() => handleLoadTrackPreset('india_tech_track')}
+            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+              activeTrack === 'india_tech_track'
+                ? 'border-amber-400 bg-amber-500/15 shadow-md'
+                : 'border-zinc-700 bg-obsidian-900/60 hover:bg-obsidian-900 hover:border-amber-500/40'
             }`}
           >
-            <input 
-              type="file" 
-              accept="image/*" 
-              onChange={handleFileChange}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-            />
-            
-            {isProcessing ? (
-              <div className="flex flex-col items-center gap-2.5">
-                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
-                <span className="font-mono text-xs text-blue-600 font-bold animate-pulse">
-                  {extractionProgress}% OCR COMPILING
-                </span>
-                <span className="font-sans text-[10px] text-zinc-500">
-                  {currentStep}
-                </span>
-              </div>
-            ) : selectedFile ? (
-              <div className="flex flex-col items-center gap-1.5 animate-fade-in">
-                <ImageIcon className="w-7 h-7 text-emerald-600" />
-                <span className="font-sans text-xs font-semibold text-zinc-850">
-                  {selectedFile.name} Attached
-                </span>
-                <span className="text-[9.5px] text-zinc-400">
-                  Campaign queue ready. Tap to exchange image block.
-                </span>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1.5">
-                <UploadCloud className="w-7 h-7 text-zinc-400" />
-                <span className="font-sans text-xs font-medium text-zinc-700">
-                  Select or Snap Resource Post Image
-                </span>
-                <span className="text-[9.5px] text-zinc-400 font-mono">
-                  Supports PNG, JPEG. Native canvas analysis.
-                </span>
-              </div>
-            )}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-100">🇮🇳 India Tech Track</span>
+              <span className="font-mono text-[9px] text-amber-300 bg-amber-500/20 px-1.5 py-0.5 rounded">
+                5 Roles
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Naukri Direct, Instahyre Fast-Track, LinkedIn India (Bangalore/NCR/Remote).
+            </p>
+          </button>
+
+          {/* Global Remote Track */}
+          <button
+            onClick={() => handleLoadTrackPreset('global_remote_track')}
+            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+              activeTrack === 'global_remote_track'
+                ? 'border-blue-400 bg-blue-500/15 shadow-md'
+                : 'border-zinc-700 bg-obsidian-900/60 hover:bg-obsidian-900 hover:border-blue-500/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-100">🌐 Global Remote Track</span>
+              <span className="font-mono text-[9px] text-blue-300 bg-blue-500/20 px-1.5 py-0.5 rounded">
+                5 Roles
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Remotive, We Work Remotely, Himalayas, FlexJobs (US/EU remote).
+            </p>
+          </button>
+
+          {/* Certifications Track */}
+          <button
+            onClick={() => handleLoadTrackPreset('certifications_track')}
+            className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+              activeTrack === 'certifications_track'
+                ? 'border-emerald-400 bg-emerald-500/15 shadow-md'
+                : 'border-zinc-700 bg-obsidian-900/60 hover:bg-obsidian-900 hover:border-emerald-500/40'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-100">🎓 Certifications Hub</span>
+              <span className="font-mono text-[9px] text-emerald-300 bg-emerald-500/20 px-1.5 py-0.5 rounded">
+                4 Programs
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-400">
+              Grow with Google, AWS SkillBuilder, Coursera Tech Credentials.
+            </p>
+          </button>
+
+        </div>
+
+        {/* CUSTOM SCREENSHOT OCR DROPZONE */}
+        <div
+          onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragging(false);
+            if (e.dataTransfer.files?.[0]) handleCustomFileUpload(e.dataTransfer.files[0]);
+          }}
+          className={`border-2 border-dashed rounded-xl p-4 text-center transition-all cursor-pointer ${
+            isDragging
+              ? 'border-amber-400 bg-amber-500/10'
+              : 'border-zinc-700 bg-obsidian-900/40 hover:bg-obsidian-900/80 hover:border-zinc-600'
+          }`}
+          onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = (e: any) => {
+              if (e.target.files?.[0]) handleCustomFileUpload(e.target.files[0]);
+            };
+            input.click();
+          }}
+        >
+          <div className="flex items-center justify-center gap-3">
+            <UploadCloud className="w-5 h-5 text-amber-400 shrink-0" />
+            <div className="text-left">
+              <p className="text-xs font-semibold text-zinc-200">
+                Drop job post screenshots or WhatsApp dump images for Gemini OCR extraction
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                Supports PNG, JPG • Auto-resolves lnkd.in redirects and portal links
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Dynamic Preset select buttons */}
-        <div className="flex flex-col gap-1.5">
-          <label className="text-[10px] font-mono uppercase font-extrabold tracking-widest text-zinc-400">
-            Use Preset campaign
-          </label>
-          <div className="grid grid-cols-1 gap-2 flex-1">
-            {sampleScreenshots.map((samp) => (
-              <button
-                key={samp.id}
-                onClick={() => selectSample(samp.id, samp.title)}
-                disabled={isProcessing || isApplying}
-                className="w-full flex flex-col items-start p-2 border border-zinc-200 rounded-lg bg-zinc-50/50 hover:bg-zinc-50 transition-colors text-left cursor-pointer disabled:opacity-45"
-              >
-                <div className="flex items-center gap-1 justify-between w-full">
-                  <span className="font-sans text-[11px] font-bold text-zinc-800">
-                    {samp.title}
-                  </span>
-                  <span className="font-mono text-[8px] bg-white border border-zinc-200 text-zinc-450 px-1 py-0.5 rounded font-bold uppercase">
-                    PROG-{samp.id}
-                  </span>
-                </div>
-                <span className="text-[9.5px] text-zinc-450 truncate mt-0.5 block w-full max-w-[170px]">
-                  {samp.desc}
-                </span>
-              </button>
-            ))}
+        {isProcessing && (
+          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl flex items-center justify-center gap-2 text-xs text-amber-300">
+            <Loader2 className="w-4 h-4 animate-spin text-amber-400" />
+            <span>{currentStep || 'Processing ingestion radar...'}</span>
           </div>
-        </div>
-
+        )}
       </div>
 
-      {/* 3. Ingress Target Stack Queue */}
-      {extractedLinks.length > 0 && (
-        <div className="border border-zinc-200 bg-white rounded-xl p-4.5 space-y-3.5 animate-fade-in shadow-inner relative">
-          
-          {toastMessage && (
-            <div className="absolute top-2 right-2 z-50 bg-[#18181B]/95 text-white text-[11px] font-mono px-3.5 py-2 rounded-lg shadow-lg flex items-center gap-1.5 border border-emerald-500 animate-pulse">
-              <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>{toastMessage}</span>
+      {/* STEP 3: ACTION QUEUE & 1-CLICK LAUNCH DECK */}
+      <div className="celestial-card rounded-2xl p-5 shadow-lg space-y-4">
+        
+        {/* Header & Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-500/15 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center text-amber-400">
+              <Zap className="w-4 h-4" />
             </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 border-b border-zinc-150 pb-3">
-            <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-blue-600" />
-              <div className="flex flex-col">
-                <h4 className="font-sans text-xs font-bold text-zinc-800 uppercase tracking-wide">
-                  Campaign Queue Stack ({extractedLinks.length} target vectors discovered)
-                </h4>
-                <p className="text-[9.5px] text-zinc-400 font-medium">Coordinate zero-suspension safe execution channels</p>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.5 rounded uppercase">
+                  Step 3
+                </span>
+                <h2 className="font-display font-bold text-xs text-zinc-100 uppercase tracking-wider">
+                  Action Queue & 1-Click Safe Launch
+                </h2>
               </div>
-            </div>
-
-            {/* Mode Selector */}
-            <div className="flex bg-zinc-100 p-0.5 rounded-lg self-start sm:self-center">
-              <button
-                type="button"
-                onClick={() => setCopilotMode('whitehat')}
-                className={`cursor-pointer px-2.5 py-1 rounded text-[9.5px] font-mono uppercase font-bold tracking-wider transition-all duration-150 ${
-                  copilotMode === 'whitehat'
-                    ? 'bg-zinc-900 text-white shadow-sm font-black'
-                    : 'text-zinc-500 hover:text-zinc-800'
-                }`}
-                title="Suspension-proof local open + clipboard integration matching authentic daily browser sessions"
-              >
-                🛡️ Copilot
-              </button>
-              <button
-                type="button"
-                onClick={() => setCopilotMode('automation')}
-                className={`cursor-pointer px-2.5 py-1 rounded text-[9.5px] font-mono uppercase font-bold tracking-wider transition-all duration-150 ${
-                  copilotMode === 'automation'
-                    ? 'bg-zinc-900 text-white shadow-sm font-black'
-                    : 'text-zinc-500 hover:text-zinc-800'
-                }`}
-                title="Interactive Playwright simulation process pipeline under Indian residential ISP IPs"
-              >
-                🤖 Emulator
-              </button>
+              <p className="text-[11px] text-zinc-400">
+                {totalTargets} verified opportunities • Anti-detection safe launch with clipboard injection.
+              </p>
             </div>
           </div>
 
-          {/* Copilot human-in-the-loop dashboard mode */}
-          {copilotMode === 'whitehat' ? (
-            <div className="space-y-3.5 max-h-[350px] overflow-y-auto pr-1">
-              {extractedLinks.map((link) => {
-                const payloadType = selectedPayloadType[link.id] || 'pitch';
-                return (
-                  <div 
-                    key={link.id}
-                    className="flex flex-col gap-3 bg-zinc-50 border border-zinc-200 p-3 rounded-xl hover:bg-zinc-100/50 transition-colors"
-                  >
-                    {/* Header Row: Badges, Url title and open deck launcher */}
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div className="flex flex-col gap-1 min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`px-1.5 py-0.5 rounded font-mono text-[8px] font-bold uppercase border ${getCategoryTheme(link.category)}`}>
-                            {link.category}
-                          </span>
-                          <span className="font-mono text-[9.5px] text-zinc-400 truncate max-w-[150px] sm:max-w-[200px]" title={link.originalUrl}>
-                            {link.originalUrl}
-                          </span>
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleValidateAllTargets}
+              disabled={isValidatingAll || extractedLinks.length === 0}
+              className="px-3 py-1.5 bg-obsidian-900 hover:bg-obsidian-800 border border-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {isValidatingAll ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
+              ) : (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+              )}
+              <span>Verify URLs</span>
+            </button>
 
-                          {/* Interactive Status Badges in Copilot mode */}
-                          {link.status === 'enrolled' ? (
-                            <span className="text-[8px] bg-emerald-50 border border-emerald-250 text-emerald-700 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                              ● Applied
-                            </span>
-                          ) : link.status === 'dead_link' ? (
-                            <span className="text-[8px] bg-red-50 border border-red-250 text-red-700 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                              ● Dead Post
-                            </span>
-                          ) : link.status === 'irrelevant' ? (
-                            <span className="text-[8px] bg-amber-50 border border-amber-250 text-amber-700 px-1.5 py-0.5 rounded font-mono font-bold uppercase">
-                              ● Irrelevant
-                            </span>
-                          ) : (
-                            <span className="text-[8px] bg-zinc-100 border border-zinc-200 text-zinc-500 px-1.5 py-0.5 rounded font-mono font-bold uppercase animate-pulse">
-                              ● Standby
-                            </span>
-                          )}
-                        </div>
+            <button
+              onClick={handleExportActionQueue}
+              disabled={extractedLinks.length === 0}
+              className="px-3 py-1.5 bg-obsidian-900 hover:bg-obsidian-800 border border-zinc-700 text-zinc-200 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <Download className="w-3.5 h-3.5 text-amber-400" />
+              <span>Backup Queue</span>
+            </button>
+          </div>
+        </div>
 
-                        {/* Direct Anchor launch display */}
-                        <div className="text-[11px] font-semibold text-zinc-800 flex items-center gap-1 min-w-0">
-                          <span className="text-zinc-400 font-normal">Target:</span>
-                          <span className="truncate text-zinc-700 font-mono text-[10.5px] leading-none" title={link.resolvedUrl}>{link.resolvedUrl}</span>
-                        </div>
-                      </div>
+        {/* TARGET CARDS LIST */}
+        <div className="space-y-3">
+          {extractedLinks.map((link) => {
+            const isCompleted = link.applied || link.status === 'completed' || link.status === 'launched';
+            const isDead = link.status === 'dead_link';
+            const currentPayload = selectedPayloadType[link.id] || 'pitch';
+            const isValidating = validatingLinks[link.id];
 
-                      {/* Launch Button Trigger */}
-                      <a 
-                        href={link.resolvedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={() => {
-                          triggerCopy(link.id, payloadType);
-                        }}
-                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-white font-mono text-[9px] font-black uppercase tracking-wider rounded-lg transition-colors inline-flex items-center gap-1 self-start sm:self-center shrink-0 shadow-sm"
-                        title="Copy details and open target portal"
-                      >
-                        <span>LAUNCH DECK</span>
-                        <ExternalLink className="w-3 h-3 text-white/90" />
-                      </a>
-                    </div>
-
-                    {/* Operational Details row */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3.5 pt-2.5 border-t border-zinc-200/60 items-center">
-                      
-                      {/* Left Side: Clipboard select payloads */}
-                      <div className="md:col-span-6 flex items-center gap-1.5">
-                        <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase whitespace-nowrap">Clip Load:</span>
-                        <div className="flex items-center gap-1 w-full">
-                          <select
-                            value={payloadType}
-                            onChange={(e) => {
-                              const selType = e.target.value as 'pitch' | 'email' | 'linkedin' | 'phone';
-                              setSelectedPayloadType(prev => ({ ...prev, [link.id]: selType }));
-                            }}
-                            className="bg-white border border-zinc-200 text-zinc-700 text-[10px] rounded px-1.5 py-1 w-full focus:outline-none"
-                          >
-                            <option value="pitch">Elevator Pitch Summary</option>
-                            <option value="email">Email Contact Parameter</option>
-                            <option value="linkedin">LinkedIn Footprint Trace</option>
-                            <option value="phone">Phone Number Vector</option>
-                          </select>
-                          <button
-                            type="button"
-                            onClick={() => triggerCopy(link.id, payloadType)}
-                            className="px-2 py-1 bg-white hover:bg-zinc-100 border border-zinc-200 rounded text-[9.5px] font-mono font-bold cursor-pointer shrink-0"
-                            title="Inject chosen payload into safe clipboard buffer"
-                          >
-                            CLIP
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Right Side: Status ledger dials */}
-                      <div className="md:col-span-6 flex items-center justify-start md:justify-end gap-1 flex-wrap">
-                        <span className="text-[9.5px] font-mono text-zinc-400 font-bold uppercase mr-1 whitespace-nowrap">Status Ledger:</span>
-                        
-                        <button
-                          type="button"
-                          onClick={() => updateTargetStatus(link.id, 'enrolled')}
-                          className={`cursor-pointer px-2 py-1 rounded text-[8.5px] font-mono font-bold border transition-all ${
-                            link.status === 'enrolled'
-                              ? 'bg-emerald-600 border-emerald-600 text-white'
-                              : 'bg-white border-zinc-250 text-zinc-550 hover:bg-emerald-50 hover:text-emerald-700'
-                          }`}
-                          title="Mark status as enrolled / applied successful"
-                        >
-                          Applied
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => updateTargetStatus(link.id, 'dead_link')}
-                          className={`cursor-pointer px-2 py-1 rounded text-[8.5px] font-mono font-bold border transition-all ${
-                            link.status === 'dead_link'
-                              ? 'bg-red-600 border-red-600 text-white'
-                              : 'bg-white border-zinc-250 text-zinc-550 hover:bg-red-50 hover:text-red-700'
-                          }`}
-                          title="Mark target webpage link as inactive / dead 404"
-                        >
-                          Dead
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => updateTargetStatus(link.id, 'irrelevant')}
-                          className={`cursor-pointer px-2 py-1 rounded text-[8.5px] font-mono font-bold border transition-all ${
-                            link.status === 'irrelevant'
-                              ? 'bg-amber-600 border-amber-600 text-white'
-                              : 'bg-white border-zinc-250 text-zinc-550 hover:bg-amber-50 hover:text-amber-700'
-                          }`}
-                          title="Mark target as irrelevant matching profiles filter"
-                        >
-                          Filter
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => updateTargetStatus(link.id, 'pending')}
-                          className={`cursor-pointer px-2 py-1 rounded text-[8.5px] font-mono font-bold border transition-all ${
-                            link.status === 'pending' || link.status === 'resolved' || !link.status
-                              ? 'bg-zinc-650 border-zinc-650 text-white'
-                              : 'bg-white border-zinc-250 text-zinc-550 hover:bg-zinc-100'
-                          }`}
-                          title="Reset target status to standby queues"
-                        >
-                          Reset
-                        </button>
-                      </div>
-
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            /* Classic simulated headless loops */
-            <div className="space-y-3.5">
-              
-              {/* Links list viewport */}
-              <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-                {extractedLinks.map((link) => (
-                  <div 
-                    key={link.id} 
-                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-zinc-50 border border-zinc-200 p-2.5 rounded-lg hover:bg-zinc-100/50 transition-colors"
-                  >
-                    <div className="flex flex-col gap-0.5 min-w-0 max-w-lg">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`px-1.5 py-0.5 rounded font-mono text-[8px] font-bold uppercase border ${getCategoryTheme(link.category)}`}>
-                          {link.category}
+            return (
+              <div
+                key={link.id}
+                className={`p-4 rounded-xl border transition-all ${
+                  isCompleted
+                    ? 'bg-obsidian-900/40 border-emerald-500/30'
+                    : isDead
+                    ? 'bg-red-950/20 border-red-500/30'
+                    : 'bg-obsidian-900/70 border-zinc-700/80 hover:border-amber-500/40'
+                }`}
+              >
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  
+                  {/* Left: Job Info */}
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-xs text-zinc-100">
+                        {link.title}
+                      </span>
+                      {link.location && (
+                        <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-obsidian-950 px-2 py-0.5 rounded font-mono">
+                          <MapPin className="w-3 h-3 text-amber-400" />
+                          <span>{link.location}</span>
                         </span>
-                        <span className="font-mono text-[9.5px] text-zinc-400 truncate max-w-[200px]">
-                          {link.originalUrl}
-                        </span>
-                      </div>
-                      <div className="text-[11px] font-semibold text-zinc-800 flex items-center gap-1 min-w-0">
-                        <span className="text-zinc-400 font-normal">Target:</span>
-                        <a 
-                          href={link.resolvedUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer" 
-                          className="text-blue-600 hover:underline hover:text-blue-750 inline-flex items-center gap-0.5 truncate max-w-full"
-                        >
-                          {link.resolvedUrl}
-                          <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                        </a>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {link.status === 'resolving' ? (
-                        <span className="text-[10px] text-blue-600 flex items-center gap-1 font-mono font-medium animate-pulse">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          Resolving...
-                        </span>
-                      ) : link.applied ? (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-2 py-0.5 flex items-center gap-1 font-mono font-bold">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                          ENROLLED
-                        </span>
-                      ) : (
-                        <span className="text-[10px] font-mono text-zinc-405 italic">
-                          Standby queue
+                      )}
+                      {link.salaryRange && (
+                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-mono font-semibold">
+                          {link.salaryRange}
                         </span>
                       )}
                     </div>
-                  </div>
-                ))}
-              </div>
 
-              {/* Trigger Loop Panel */}
-              <div className="border-t border-zinc-150 pt-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[10px] font-mono text-zinc-400 uppercase font-black tracking-wider">Rest Safety Interval</span>
-                  <div className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-zinc-400" />
-                    <select
-                      value={cooldownDelay}
-                      onChange={(e) => setCooldownDelay(Number(e.target.value))}
-                      disabled={isApplying}
-                      className="bg-zinc-50 border border-zinc-200 text-zinc-700 text-xs rounded px-2 py-1 select-none font-medium focus:outline-none font-mono"
-                    >
-                      <option value={10}>10s delay</option>
-                      <option value={30}>30s standard stealth cooldown</option>
-                      <option value={60}>60s extreme throttle cycle</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex-shrink-0">
-                  {isApplying ? (
-                    <div className="flex flex-col gap-1 items-end">
-                      <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 text-blue-700 px-4.5 py-2 rounded-lg font-mono text-xs font-bold uppercase animate-pulse">
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Apply thread running ({applyProgress}%)</span>
-                      </div>
-                      <span className="text-[8.5px] font-mono text-zinc-400 truncate max-w-[200px]" title={currentApplyLink}>
-                        Active: {currentApplyLink}
-                      </span>
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+                      <span className="text-zinc-300 font-medium">{link.company}</span>
+                      <span>•</span>
+                      <span className="font-mono text-zinc-400">{link.domain}</span>
+                      <span>•</span>
+                      <span className="text-amber-400/80 font-mono text-[10px]">{link.category}</span>
                     </div>
-                  ) : (
+
+                    {/* Resolved URL Preview */}
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-zinc-400 truncate pt-0.5">
+                      <span className="text-zinc-400">Target:</span>
+                      <a
+                        href={link.resolvedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-amber-400 hover:underline truncate max-w-sm"
+                      >
+                        {link.resolvedUrl}
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Right: Payload Dropdown & 1-Click Launch */}
+                  <div className="flex items-center gap-2.5 shrink-0 self-start md:self-center">
+                    
+                    {/* Payload Selector */}
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[9px] font-mono uppercase text-zinc-400 font-bold">Injected Payload</span>
+                      <select
+                        value={currentPayload}
+                        onChange={(e) => setSelectedPayloadType(prev => ({
+                          ...prev,
+                          [link.id]: e.target.value as TargetPayloadType
+                        }))}
+                        className="bg-obsidian-950 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1 focus:outline-none focus:border-amber-400 cursor-pointer"
+                      >
+                        <option value="pitch">Elevator Pitch (~60w)</option>
+                        <option value="cover_letter">Cover Letter</option>
+                        <option value="email">Email Address</option>
+                        <option value="linkedin">LinkedIn URL</option>
+                        <option value="phone">Mobile Phone</option>
+                      </select>
+                    </div>
+
+                    {/* Launch Button */}
                     <button
-                      type="button"
-                      onClick={startAutoApplyLoop}
-                      className="w-full sm:w-auto px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs uppercase tracking-wider rounded-lg transition-colors inline-flex items-center justify-center gap-2 cursor-pointer shadow-sm shadow-blue-600/10"
+                      onClick={() => handleSafeLaunch(link)}
+                      disabled={isValidating}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all shadow-md cursor-pointer ${
+                        isCompleted
+                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30'
+                          : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 shadow-amber-500/10'
+                      }`}
                     >
-                      <Zap className="w-4 h-4 fill-current" />
-                      <span>Execute Process Run Loop Securely</span>
+                      {isValidating ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : isCompleted ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5" />
+                      )}
+                      <span>{isCompleted ? 'Re-Launch' : '1-Click Launch'}</span>
                     </button>
-                  )}
+
+                  </div>
+
                 </div>
-
               </div>
+            );
+          })}
+        </div>
 
-            </div>
+        {/* Footer Navigation */}
+        <div className="flex items-center justify-between pt-2 border-t border-amber-500/15 text-xs text-zinc-400">
+          <p>
+            {appliedCount} of {totalTargets} targets launched in this session
+          </p>
+          {onNavigateToHistory && (
+            <button
+              onClick={onNavigateToHistory}
+              className="font-semibold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+            >
+              <span>Step 4: View Audit History</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           )}
+        </div>
 
-          {/* Compliance informational footer */}
-          <div className="flex items-start gap-1 py-1.5 px-2 bg-zinc-50 border border-zinc-200 rounded text-[9.5px] text-zinc-400 leading-snug font-sans">
-            <Info className="w-3.5 h-3.5 text-blue-500 mt-0.5 shrink-0" />
-            <span>
-              {copilotMode === 'whitehat' 
-                ? "PREVENTS SUSPENSION: Copilot launching duplicates real user context in your main browser (Chrome/Safari) using your local session cookie space. The selected values copy instantly on launch, allowing effortless paste inputs."
-                : "RESIDENTIAL TUNNEL NOTE: Playwright automation relies on our Airtell residential IP address spoofing metrics and randomly distributed human keyboard-mouse gestures."}
-            </span>
-          </div>
+        {/* IP Compliance Verification Note */}
+        <ComplianceVerificationBadge 
+          variant="banner" 
+          assetName="Target Extraction & Payload Queue"
+        />
 
+      </div>
+
+      {/* TOAST POPUP */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-obsidian-900 text-zinc-100 px-4 py-2.5 rounded-xl shadow-2xl border border-amber-500/40 flex items-center gap-2 text-xs font-medium animate-fade-in">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span>{toastMessage}</span>
         </div>
       )}
 

@@ -1,45 +1,116 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Cinzel:wght@500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
-  --font-sans: "Inter", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Space Grotesk", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-celestial: "Cinzel", serif;
 
-  --color-obsidian: #18181b;
-  --color-electric-cyan: #1d4ed8;
-  --color-emerald-neon: #16a34a;
-  --color-cool-slate: #71717a;
-  --color-dark-surface: #f4f4f5;
-  --color-card-bg: #ffffff;
+  --color-obsidian-950: #07090E;
+  --color-obsidian-900: #0D1117;
+  --color-obsidian-800: #161B22;
+  --color-obsidian-700: #21262D;
+
+  --color-astral-gold: #F59E0B;
+  --color-astral-amber: #D97706;
+  --color-astral-brass: #B45309;
+  --color-celestial-light: #FDE68A;
+
+  --color-sapphire-500: #3B82F6;
+  --color-sapphire-600: #2563EB;
+  --color-emerald-neon: #10B981;
+}
+
+:root {
+  --bg-canvas: #090D16;
+  --bg-card: rgba(18, 24, 38, 0.75);
+  --border-gold: rgba(245, 158, 11, 0.22);
+  --border-subtle: rgba(255, 255, 255, 0.08);
 }
 
 html, body {
-  background-color: #f4f4f5;
-  color: #181a1c;
+  background-color: #080C14;
+  color: #F3F4F6;
   font-family: var(--font-sans);
   min-height: 100vh;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-image: 
+    radial-gradient(circle at 15% 15%, rgba(245, 158, 11, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 85% 85%, rgba(59, 130, 246, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 50% 0%, rgba(217, 119, 6, 0.06) 0%, transparent 50%);
+  background-attachment: fixed;
 }
 
-/* Elegant crisp paper card shadow and thin outline borders */
-.paper-shadow {
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+/* Astrolabe / Celestial Glows and Rings */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
-.paper-border {
-  border: 1px solid #e4e4e7;
+@keyframes spin-reverse-slow {
+  from { transform: rotate(360deg); }
+  to { transform: rotate(0deg); }
 }
 
-.text-gradient-cyan {
-  color: #1d4ed8;
+@keyframes pulse-celestial {
+  0%, 100% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
 }
 
-.text-gradient-emerald {
-  color: #16a34a;
+.animate-spin-slow {
+  animation: spin-slow 40s linear infinite;
 }
 
+.animate-spin-reverse-slow {
+  animation: spin-reverse-slow 60s linear infinite;
+}
 
+.animate-pulse-celestial {
+  animation: pulse-celestial 4s ease-in-out infinite;
+}
+
+/* Glassmorphic Navigational Cards */
+.celestial-card {
+  background: rgba(13, 18, 28, 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(245, 158, 11, 0.15);
+  box-shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.4), inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+
+.celestial-card:hover {
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.celestial-card-active {
+  border-color: rgba(245, 158, 11, 0.45);
+  box-shadow: 0 0 25px -4px rgba(245, 158, 11, 0.18), inset 0 1px 0 0 rgba(253, 230, 138, 0.2);
+}
+
+.gold-glow {
+  text-shadow: 0 0 16px rgba(245, 158, 11, 0.4);
+}
+
+.gold-border-glow {
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(13, 17, 23, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 158, 11, 0.25);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(245, 158, 11, 0.45);
+}

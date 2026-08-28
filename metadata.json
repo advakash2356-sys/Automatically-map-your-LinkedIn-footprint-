@@ -1,6 +1,7 @@
 {
-  "name": "Akash Sync Agent",
-  "description": "Administrative control center and automation dashboard for local workflow optimization, profile indexing status, and secure Cloudflare Access policy synchronization.",
+  "name": "PathPilot AI",
+  "description": "The Enterprise White-Hat Career Operations Engine powered by Akash Sync Agent. 4-step safe copilot deck with resume parsing, OCR job ingestion, 1-click launch, and audit exports.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+
