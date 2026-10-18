@@ -1,4 +1,5 @@
 import express from 'express';
+import { userKeyMiddleware, resolveGeminiKey, hasRequestKey } from './server/userKey';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import dotenv from 'dotenv';
@@ -17,16 +18,21 @@ const OWNER_EMAIL = process.env.OWNER_EMAIL || 'admin@example.com';
 const app = express();
 const PORT = 3000;
 
+app.use(userKeyMiddleware);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Lazy-initialized Gemini API client
 let aiClient: GoogleGenAI | null = null;
 function getGeminiClient(): GoogleGenAI {
+  if (hasRequestKey()) {
+    // Per-request user key: never cached across requests.
+    return new GoogleGenAI({ apiKey: resolveGeminiKey()!, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } });
+  }
   if (!aiClient) {
     const key = process.env.GEMINI_API_KEY;
     if (!key) {
-      throw new Error('GEMINI_API_KEY environment variable is required');
+      throw new Error('No Gemini API key: set GEMINI_API_KEY or enter your key in the app');
     }
     aiClient = new GoogleGenAI({
       apiKey: key,
@@ -906,7 +912,7 @@ app.post('/api/profile/extract', async (req, res) => {
     let dynamicSummary = `${candidateName} is an accomplished ${primaryRole.toLowerCase()} with ${exp} specializing in ${finalSkills.slice(0, 4).join(', ')}.`;
 
     // 10. Optional Gemini AI High-Precision Enhancement Pass
-    if (process.env.GEMINI_API_KEY) {
+    if (resolveGeminiKey()) {
       try {
         const client = getGeminiClient();
         const prompt = `You are an expert ATS resume parser. Extract candidate details from this resume text into valid JSON format with NO markdown wrapping.
@@ -1008,7 +1014,7 @@ app.post('/api/vision/ocr-resolve', async (req, res) => {
   }
 
   // Gemini Vision OCR for custom screenshot
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = resolveGeminiKey();
   if (isCustom && base64Data && apiKey) {
     try {
       addLog('info', 'System', `Sending screenshot to Gemini Multimodal OCR...`);
