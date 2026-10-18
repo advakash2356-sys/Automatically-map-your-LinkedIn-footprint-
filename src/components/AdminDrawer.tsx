@@ -201,10 +201,10 @@ export default function AdminDrawer({
                 <div className="p-3 bg-obsidian-950 border border-zinc-800 rounded-xl space-y-1">
                   <div className="flex items-center gap-1.5 text-amber-400 text-[10px] uppercase font-mono font-bold">
                     <Globe className="w-3 h-3" />
-                    <span>Residential IP</span>
+                    <span>Residential IP (SAMPLE DATA)</span>
                   </div>
                   <div className="font-mono text-xs font-bold text-zinc-100">
-                    {status.residentialIp || '122.161.49.208'}
+                    {status.residentialIp || '203.0.113.10 (sample)'}
                   </div>
                   <div className="text-[10px] text-zinc-400 truncate">{status.location}</div>
                 </div>

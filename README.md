@@ -1,5 +1,7 @@
 # Automatically-map-your-LinkedIn-footprint-
 
+> **Prototype / demo.** This project uses simulated data. It has **no real LinkedIn access**: no login, no scraping of your profile, and nothing is posted or applied on your behalf. Telemetry (IP, location, tunnel, latency, progress/"humanized visit" steps) is sample data generated in `server.ts`, and the IP shown is a reserved documentation address. Treat it as a UI/workflow concept, not a working footprint-mapping tool.
+
 The Enterprise White-Hat Career Operations Engine powered by Akash Sync Agent to automatically map your career footprint.
 
 ## Features

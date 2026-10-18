@@ -47,7 +47,7 @@ let subscribers: Subscriber[] = [
 let systemStatus: SystemStatus = {
   uptimeSeconds: 24800,
   isCaffeinated: true, // MacOS awake wrapper state
-  residentialIp: '122.161.49.208', // Indian ISP residential footprint
+  residentialIp: '203.0.113.10 (sample)', // Indian ISP residential footprint
   location: 'New Delhi, India (IN)',
   latencyMs: 14,
   tunnelActive: true,

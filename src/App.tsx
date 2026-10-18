@@ -45,7 +45,7 @@ import { ShieldCheck } from 'lucide-react';
 export default function App() {
   // Core System & Telemetry State
   const [systemState, setSystemState] = useState<SystemStatus>({
-    residentialIp: '122.161.49.208',
+    residentialIp: '203.0.113.10 (sample)',
     location: 'New Delhi, India (Airtel Broadband)',
     isCaffeinated: true,
     activeTasksCount: 2,
