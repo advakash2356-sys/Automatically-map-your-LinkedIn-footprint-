@@ -11,6 +11,8 @@ const pdf = require('pdf-parse');
 const mammoth = require('mammoth');
 
 dotenv.config();
+// Owner/admin email: set OWNER_EMAIL in .env (see .env.example)
+const OWNER_EMAIL = process.env.OWNER_EMAIL || 'admin@example.com';
 
 const app = express();
 const PORT = 3000;
@@ -40,8 +42,8 @@ function getGeminiClient(): GoogleGenAI {
 
 // In-Memory Database / State Configuration
 let subscribers: Subscriber[] = [
-  { email: 'Adv.akash2356@gmail.com', addedAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(), durationHrs: 720, status: 'Active' },
-  { email: 'akash.techlead@gmail.com', addedAt: new Date(Date.now() - 3600000 * 48).toISOString(), durationHrs: 720, status: 'Active' }
+  { email: OWNER_EMAIL, addedAt: new Date(Date.now() - 3600000 * 24 * 5).toISOString(), durationHrs: 720, status: 'Active' },
+  { email: 'colleague@example.com', addedAt: new Date(Date.now() - 3600000 * 48).toISOString(), durationHrs: 720, status: 'Active' }
 ];
 
 let systemStatus: SystemStatus = {
@@ -147,7 +149,7 @@ let agentLogs: AgentLog[] = [
     timestamp: new Date(Date.now() - 12000000).toISOString(),
     level: 'success',
     source: 'Copilot',
-    message: 'Celestial Astrolabe Wayfinder initialized for candidate: Adv.akash2356@gmail.com'
+    message: 'Celestial Astrolabe Wayfinder initialized for candidate: ' + OWNER_EMAIL
   }
 ];
 
@@ -250,7 +252,7 @@ let candidateProfile: CandidateProfile = {
   linkedinUrl: '',
   naukriUrl: '',
   resumeFilename: '',
-  email: 'Adv.akash2356@gmail.com',
+  email: OWNER_EMAIL,
   phone: '',
   skills: [
     'TypeScript',
@@ -267,7 +269,7 @@ let candidateProfile: CandidateProfile = {
   experienceYears: '7+ Years',
   summary: 'Senior Full-Stack & Distributed Systems Architect with 7+ years of experience engineering high-scale web platforms, resilient automation workflows, and zero-trust edge infrastructure.',
   tailoredPitch: 'Akash Sharma — Senior Systems Architect with 7+ years delivering high-impact web and systems architectures. Specialized in TypeScript, React, Node.js, and Cloud Infrastructure. Proven track record of shipping resilient, production-ready software, optimizing recruiter conversion rates, and automating complex workflows. Excited to contribute strategic engineering execution to your team.',
-  coverLetter: `Dear Hiring Team,\n\nI am writing to express my strong interest in the Senior Engineering role. With over 7 years of hands-on experience architecting scalable React/Node.js web applications, high-concurrency microservices, and zero-trust cloud infrastructure, I have consistently led initiatives that enhance application performance and developer productivity.\n\nKey highlights I bring:\n• Engineering full-stack web applications with sub-second response times\n• Automating end-to-end testing and browser workflows using Playwright\n• Deploying secure, distributed edge systems backed by modern CI/CD\n\nI look forward to discussing how my experience aligns with your team's goals.\n\nBest regards,\nAkash Sharma\nAdv.akash2356@gmail.com`,
+  coverLetter: `Dear Hiring Team,\n\nI am writing to express my strong interest in the Senior Engineering role. With over 7 years of hands-on experience architecting scalable React/Node.js web applications, high-concurrency microservices, and zero-trust cloud infrastructure, I have consistently led initiatives that enhance application performance and developer productivity.\n\nKey highlights I bring:\n• Engineering full-stack web applications with sub-second response times\n• Automating end-to-end testing and browser workflows using Playwright\n• Deploying secure, distributed edge systems backed by modern CI/CD\n\nI look forward to discussing how my experience aligns with your team's goals.\n\nBest regards,\nAkash Sharma\n${OWNER_EMAIL}`,
   rawText: ''
 };
 
@@ -770,7 +772,7 @@ app.post('/api/profile/extract', async (req, res) => {
     // 1. Precise Email Extraction
     const emailMatches = extractedText.match(/[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+/g) || [];
     const validEmails = emailMatches.filter(e => !e.endsWith('.png') && !e.endsWith('.jpg') && !e.endsWith('.pdf') && e.length > 5);
-    let extractedEmail = validEmails.length > 0 ? validEmails[0].trim() : (candidateProfile.email || 'Adv.akash2356@gmail.com');
+    let extractedEmail = validEmails.length > 0 ? validEmails[0].trim() : (candidateProfile.email || OWNER_EMAIL);
 
     // 2. Precise Phone Extraction (NO generic dummy number!)
     let extractedPhone = '';
