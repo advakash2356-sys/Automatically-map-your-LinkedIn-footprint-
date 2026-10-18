@@ -7,7 +7,7 @@ The Enterprise White-Hat Career Operations Engine powered by Akash Sync Agent to
 - **Safe 4-Step Copilot Deck**: Operations flow for India and Global Remote career opportunities.
 - **Resume & Document Ingestion**: Ingests and parses documents using `pdf-parse` and `mammoth`.
 - **OCR Job Ingestion & AI Analysis**: Powered by Google GenAI (`@google/genai`).
-- **Telemetry & Engine Tracking**: Live telemetry reporting residential IP, location, tunnel status, latency, uptime, and caffeination state.
+- **Telemetry & Engine Tracking (demo/simulated)**: Dashboard showing IP, location, tunnel status, latency, uptime and caffeination state. These values are hardcoded demo data in `server.ts`, not live measurements.
 - **Admin & Control Drawer**: Manage network settings, subscribers, tasks, logs, and Cloudflare configurations.
 - **Celestial Progress Dashboard**: Dynamic completion scoring across profile ingestion, target verification, and application history.
 - **Workspace Navigation**: Dedicated views including VisionPanel, HistoryPanel, QuickStartGuide, and Compliance Verification.
